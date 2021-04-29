@@ -1,24 +1,11 @@
 package com.numj;
 
 
-import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Iterator;
-import java.util.List;
-import java.util.function.BiFunction;
 
-import static com.numj.NDArray.index;
-import static com.numj.NDArray.slice;
+import static com.numj.NDArray.*;
 
 public class Main {
-    static void print(Object... args){
-        StringBuilder string = new StringBuilder();
-        for (Object arg:args) {
-            if(string.length() != 0) string.append(" ");
-            string.append(arg.toString());
-        }
-        System.out.println(string.toString());
-    }
 
     static void test() {
 
@@ -45,9 +32,9 @@ public class Main {
         print(Arrays.toString(ndarray.data.data));
 
         NDArray<Double> _view = ndarray
-                .get(new NDArray.Selection[]{
+                .get(new Selection[]{
                         index(0), slice(1, 7), slice(), index(0)})
-                .get(new NDArray.Selection[]{index(-2)})
+                .get(new Selection[]{index(-2)})
                 .get(slice(20, null, -1));
 
         print("[NDArray]. getValue(): " +
@@ -65,13 +52,13 @@ public class Main {
         print(ndarray.toString());
 
 
-        NDArray<Double> x1 = NDArray.array(new Double[][]{
+        NDArray<Double> x1 = array(new Double[][]{
                 {0.0, 1.0, 2.0},
                 {3.0, 4.0, 5.0},
                 {6.0, 7.0, 8.0}
         });
 
-        NDArray<Double> x2 = NDArray.array(new Double[][]{
+        NDArray<Double> x2 = array(new Double[][]{
                 {0.0, 1.0, 2.0},
                 {3.0, -1.0, 5.0},
                 {6.0, 7.0, 8.0}
@@ -81,18 +68,18 @@ public class Main {
         print("x1: " + x1);
         print("x2: " + x2);
 
-        NDArray<Double> out = NDArray.add(x1, x2);
+        NDArray<Double> out = add(x1, x2);
 
         print(out.toString());
 
-        NDArray<Double> x = NDArray.array(new Double[]{1.0, 2.0, 3.0});
-        NDArray<Double> y = NDArray.array(new Double[][]{{4.0}, {5.0}, {6.0}});
+        NDArray<Double> x = array(new Double[]{1.0, 2.0, 3.0});
+        NDArray<Double> y = array(new Double[][]{{4.0}, {5.0}, {6.0}});
         print("x: " + x);
         print("y: " + y);
 
-        print("x + y: " + NDArray.add(x, y));
-        print("x + 2: " + NDArray.add(x, NDArray.array(new Double[]{2.0})));
-        print("2 + y: " + NDArray.add(NDArray.array(new Double[]{2.0}), y));
+        print("x + y: " + add(x, y));
+        print("x + 2: " + add(x, array(new Double[]{2.0})));
+        print("2 + y: " + add(array(new Double[]{2.0}), y));
 
         NDArray<Double> view = _view.view();
         NDArray<Double> copy = _view.copy();
@@ -107,12 +94,13 @@ public class Main {
         print("view: " + view);
         print("copy: " + copy);
 
-        print(NDArray.add(NDArray.mul(x, y), NDArray.div(NDArray.sub(y, x), x)).toString());
+        print(add(mul(x, y), div(sub(y, x), x)).toString());
 
-        NDArray<Integer> a = NDArray.arange(0, 6, 1).reshape(new int[]{3, 2});
+        NDArray<Integer> a = arange(0, 6, 1).reshape(new int[]{3, 2});
         print(a);
-        a = NDArray.array(new Integer[][]{{1,2,3},{4,5,6}});
+        a = array(new Integer[][]{{1, 2, 3}, {4, 5, 6}});
         a = a.reshape(new int[]{3, -1});
+        a = a.get(slice(null, null, -1), slice(null, null, -1));
         print(a);
 
         print("END");
