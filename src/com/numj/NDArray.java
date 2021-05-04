@@ -1,10 +1,9 @@
 package com.numj;
 
 
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
+import java.util.*;
 import java.util.function.BiFunction;
+import java.util.function.Function;
 
 class NDArray<T> {
 
@@ -69,10 +68,10 @@ class NDArray<T> {
         }
     }
 
-    static public <T> NDArray<T> apply(NDArray<T> a, NDArray<T> b, BiFunction<T, T, T> func) {
+    static public <T, E> NDArray<E> apply(NDArray<T> a, NDArray<T> b, BiFunction<T, T, E> func) {
         Broadcast<T> bc = new Broadcast<>(a, b);
         if (bc.shape == null) return null;
-        NDArray<T> out = new NDArray<>(bc.shape);
+        NDArray<E> out = new NDArray<>(bc.shape);
         for (int i = 0; bc.hasNext(); i++) {
             int[][] indices = bc.next();
             out.data(i, func.apply(a.getValue(indices[0]), b.getValue(indices[1])));
@@ -94,6 +93,164 @@ class NDArray<T> {
 
     static public NDArray<Double> div(NDArray<Double> a, NDArray<Double> b) {
         return apply(a, b, Operator::div);
+    }
+
+    static public NDArray<Boolean> gt(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::gt);
+    }
+
+    static public NDArray<Boolean> gte(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::gte);
+    }
+
+    static public NDArray<Boolean> lt(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::lt);
+    }
+
+    static public NDArray<Boolean> lte(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::lte);
+    }
+
+    static public NDArray<Boolean> eq(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::eq);
+    }
+
+    static public NDArray<Boolean> neq(NDArray<Double> a, NDArray<Double> b) {
+        return apply(a, b, Operator::neq);
+    }
+
+    static public NDArray<Double> zeros(int[] shape){
+        NDArray<Double> ndarray = new NDArray<>(shape);
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            ndarray.setValue(indices, 0.0);
+        }
+        return ndarray;
+    }
+
+    static public Boolean all(NDArray<Boolean> ndarray){
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            if(!ndarray.getValue(indices)) return false;
+        }
+        return true;
+    }
+
+    static public Boolean any(NDArray<Boolean> ndarray){
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            if(ndarray.getValue(indices)) return true;
+        }
+        return false;
+    }
+
+    static public NDArray<Double> ones(int[] shape){
+        NDArray<Double> ndarray = new NDArray<>(shape);
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            ndarray.setValue(indices, 1.0);
+        }
+        return ndarray;
+    }
+
+    static Random rand = new Random();
+    static public NDArray<Double> random(int[] shape){
+        NDArray<Double> ndarray = new NDArray<>(shape);
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            ndarray.setValue(indices, rand.nextDouble());
+        }
+        return ndarray;
+    }
+
+    static public Double amin(NDArray<Double> ndarray){
+        Double min = null;
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            Double value = ndarray.getValue(indices);
+            if(min == null) min = value;
+            else min = Math.min(min, value);
+        }
+        return min;
+    }
+
+    static public NDArray<Double> nan_to_num(NDArray<Double> ndarray){
+        NDArray<Double> out = ndarray.copy();
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            Double value = ndarray.getValue(indices);
+            if(value == null || Double.isNaN(value))
+                value = 0.0;
+            out.setValue(indices, value);
+        }
+        return out;
+    }
+
+    static public NDArray<Double> amin(NDArray<Double> ndarray, int axis){
+        int[] shape = new int[ndarray.shape.length - 1];
+        Selection[] selections = new Selection[ndarray.shape.length];
+        for (int i = 0, j = 0; i < ndarray.shape.length; i++) {
+            if(axis != i){
+                shape[j] = ndarray.shape[i];
+                j++;
+            }
+        }
+        NDArray<Double> out = new NDArray<>(shape);
+
+        int[] outIndices = new int[out.shape.length];
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            if(indices[axis] != 0) continue;
+            for (int i = 0, j=0; i < selections.length; i++) {
+                if(i == axis) selections[i] = slice();
+                else{
+                    selections[i] = index(indices[i]);
+                    outIndices[j] = indices[i];
+                    j++;
+                }
+            }
+            out.setValue(outIndices, amin(ndarray.get(selections)));
+        }
+        return out;
+    }
+
+    static public NDArray<Double> amax(NDArray<Double> ndarray, int axis){
+        int[] shape = new int[ndarray.shape.length - 1];
+        Selection[] selections = new Selection[ndarray.shape.length];
+        for (int i = 0, j = 0; i < ndarray.shape.length; i++) {
+            if(axis != i){
+                shape[j] = ndarray.shape[i];
+                j++;
+            }
+        }
+        NDArray<Double> out = new NDArray<>(shape);
+
+        int[] outIndices = new int[out.shape.length];
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            if(indices[axis] != 0) continue;
+            for (int i = 0, j=0; i < selections.length; i++) {
+                if(i == axis) selections[i] = slice();
+                else{
+                    selections[i] = index(indices[i]);
+                    outIndices[j] = indices[i];
+                    j++;
+                }
+            }
+            out.setValue(outIndices, amax(ndarray.get(selections)));
+        }
+        return out;
+    }
+
+    static public Double amax(NDArray<Double> ndarray){
+        Double max = null;
+        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            Double value = ndarray.getValue(indices);
+            if(max == null) max = value;
+            else max = Math.max(max, value);
+        }
+        return max;
     }
 
     static public NDArray<Integer> arange(int start, int stop, int step) {
@@ -166,9 +323,7 @@ class NDArray<T> {
             if (size % rest != 0) return null;
             _shape[unknown] = size / rest;
         }
-//        print("" + size + ", "+rest);
-//        print(Arrays.toString(ndarray.data.shape));
-//        print(Arrays.toString(ndarray.data.data));
+
         ndarray.data.shape = _shape;
         ndarray.shape = ndarray.shape();
         return ndarray;
@@ -219,6 +374,16 @@ class NDArray<T> {
 
         Offset[] offsets = offsetList.toArray(new Offset[0]);
         return new NDArray<>(data, offsets);
+    }
+
+    public void set(NDArray<T> src) {
+        if(!Arrays.equals(shape, src.shape)){
+            return;
+        }
+        for (Iterator<int[]> it = indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            setValue(indices, src.getValue(indices));
+        }
     }
 
     private int[] shape() {
@@ -282,6 +447,15 @@ class NDArray<T> {
         data(ind, value);
     }
 
+    public <E> NDArray<E> astype(Function<T, E> valueOf){
+        NDArray<E> ndarray = new NDArray<>(shape);
+        for (Iterator<int[]> it = indexIterator(); it.hasNext(); ) {
+            int[] indices = it.next();
+            ndarray.setValue(indices, valueOf.apply(getValue(indices)));
+        }
+        return ndarray;
+    }
+
     public String toString() {
         if (shape.length == 0) return data(0).toString();
 
@@ -321,6 +495,26 @@ class NDArray<T> {
 
         static Double div(Double a, Double b) {
             return a / b;
+        }
+
+        static Boolean gt(Double a, Double b){
+            return a > b;
+        }
+        static Boolean gte(Double a, Double b){
+            return a >= b;
+        }
+        static Boolean lt(Double a, Double b){
+            return a < b;
+        }
+        static Boolean lte(Double a, Double b){
+            return a <= b;
+        }
+        static Boolean eq(Double a, Double b){
+            return a.equals(b);
+        }
+
+        static Boolean neq(Double a, Double b){
+            return !a.equals(b);
         }
     }
 

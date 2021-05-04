@@ -103,6 +103,16 @@ public class Main {
         a = a.get(slice(null, null, -1), slice(null, null, -1));
         print(a);
 
+        NDArray<Double> d = arange(0, 21*2, 1).reshape(new int[]{21, 2}).astype(Double::valueOf);
+        d = amin(d, 1);
+        print(d);
+
+        NDArray<Double> arr = NDArray.random(new int[]{21, 2});
+        NDArray<Double> arr1 = NDArray.sub(arr, NDArray.amin(arr, 0));
+        print("arr:", arr);
+        print("arr-amin(arr):", arr1);
+        print("arr>0.5", NDArray.gt(arr1, array(new Double[]{0.5})));
+
         print("END");
     }
 
