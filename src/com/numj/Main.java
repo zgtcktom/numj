@@ -113,6 +113,29 @@ public class Main {
         print("arr-amin(arr):", arr1);
         print("arr>0.5", NDArray.gt(arr1, array(new Double[]{0.5})));
 
+        print(argmax(NDArray.arange(0, 100, 1).astype(Double::valueOf)));
+
+        arr.get(1).set(array(new Double[]{99.0, 99.1}));
+        print(arr);
+
+        NDArray<Double> concat0 = NDArray.random(new int[]{1, 2});
+        NDArray<Double> concat1 = NDArray.random(new int[]{2, 2});
+        print(concat0);
+        print(concat1);
+        print(concat(concat0, concat1));
+        print(Arrays.toString(concat0.get(slice(1, null)).shape));
+
+        print(new NDArray<Double>(new int[]{0, 2, 9}));
+
+        print(mean(arange(0,100,1).reshape(new int[]{5, 5, -1}).astype(NDArray::Double), 1));
+
+        print(abs(sub(random(new int[]{5,2}), array(new Double[]{0.5}))));
+
+        for (int[] index:NDArray.ndindex(new int[]{1,5,2})) {
+            print(Arrays.toString(index));
+        }
+        print(NDArray.ndindex(new int[]{1,5,2}));
+
         print("END");
     }
 
