@@ -6,9 +6,10 @@ import java.util.function.BiFunction;
 import java.util.function.Function;
 
 
-class NDArray<T> {
+class NDArray<T> implements Iterable<NDArray<T>> {
 
     private static final Random rand = new Random();
+    private static final int[] EMPTY = new int[0];
     public final TypedArray<T> data;
     public final int[] shape;
     public final int ndim;
@@ -190,7 +191,7 @@ class NDArray<T> {
     }
 
     public static <T> NDArray<T> array(T value) {
-        NDArray<T> out = new NDArray<>(new int[]{});
+        NDArray<T> out = new NDArray<>(new int[0]);
         out.itemset(0, value);
         return out;
     }
@@ -244,6 +245,18 @@ class NDArray<T> {
 
     static public NDArray<Boolean> neq(NDArray<Double> a, NDArray<Double> b) {
         return apply(a, b, Operator::neq);
+    }
+
+    public static NDArray<Double> power(NDArray<Double> a, NDArray<Double> b) {
+        Broadcast broadcast = broadcast(a, b);
+        NDArray<Double> out = new NDArray<>(broadcast.shape);
+
+        int i = 0;
+        for (int[][] indices : broadcast) {
+            out.itemset(i, Math.pow(a.item(indices[0]), b.item(indices[1])));
+            i++;
+        }
+        return out;
     }
 
     static public NDArray<Double> zeros(int[] shape) {
@@ -301,6 +314,14 @@ class NDArray<T> {
             if (value == null || Double.isNaN(value))
                 value = 0.0;
             out.itemset(index, value);
+        }
+        return out;
+    }
+
+    public static <T> NDArray<T> fromfunction(Function<int[], T> valueOf, int[] shape) {
+        NDArray<T> out = new NDArray<>(shape);
+        for (int[] index : ndindex(shape)) {
+            out.itemset(index, valueOf.apply(index));
         }
         return out;
     }
@@ -572,6 +593,10 @@ class NDArray<T> {
         return data.get(itemindex(index));
     }
 
+    public T item() {
+        return item(EMPTY);
+    }
+
     private int itemindex(int[] index) {
         if (index.length != ndim) throw new ArrayIndexOutOfBoundsException();
         int ind = 0;
@@ -675,6 +700,10 @@ class NDArray<T> {
         }
     }
 
+    public Iterator<NDArray<T>> iterator() {
+        return new ElementIterator<>(this);
+    }
+
     public NDArray<T> flatten() {
         NDArray<T> out = new NDArray<>(new int[]{size});
         if (size == 1) {
@@ -722,6 +751,25 @@ class NDArray<T> {
             for (int[][] indices : broadcast) {
                 itemset(indices[0], src.item(indices[1]));
             }
+        }
+    }
+
+    private static class ElementIterator<T> implements Iterator<NDArray<T>> {
+        private final NDArray<T> ndarray;
+        private int ind = 0;
+
+        public ElementIterator(NDArray<T> ndarray) {
+            this.ndarray = ndarray;
+        }
+
+        public boolean hasNext() {
+            return ind < ndarray.shape[0];
+        }
+
+        public NDArray<T> next() {
+            NDArray<T> value = ndarray.get(index(ind));
+            ind++;
+            return value;
         }
     }
 

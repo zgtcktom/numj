@@ -1,6 +1,9 @@
 package com.numj;
 
 
+import java.lang.Boolean;
+import java.lang.Double;
+import java.lang.Integer;
 import java.util.Arrays;
 
 import static com.numj.NDArray.*;
@@ -103,7 +106,7 @@ public class Main {
         a = a.get(slice(null, null, -1), slice(null, null, -1));
         print(a);
 
-        NDArray<Double> d = arange(0, 21*2, 1).reshape(new int[]{21, 2}).astype(Double::valueOf);
+        NDArray<Double> d = arange(0, 21 * 2, 1).reshape(new int[]{21, 2}).astype(Double::valueOf);
         d = amin(d, 1);
         print(d);
 
@@ -129,23 +132,23 @@ public class Main {
 
         print(new NDArray<Double>(new int[]{0, 2, 9}));
 
-        print(mean(arange(0,100,1).reshape(new int[]{5, 5, -1}).astype(NDArray::Double), 1));
+        print(mean(arange(0, 100, 1).reshape(new int[]{5, 5, -1}).astype(NDArray::Double), 1));
 
-        print(abs(sub(random(new int[]{5,2}), array(new Double[]{0.5}))));
+        print(abs(sub(random(new int[]{5, 2}), array(new Double[]{0.5}))));
 
-        for (int[] index:NDArray.ndindex(new int[]{1,5,2})) {
+        for (int[] index : NDArray.ndindex(new int[]{1, 5, 2})) {
             print(Arrays.toString(index));
         }
-        print(NDArray.ndindex(new int[]{1,5,2}));
+        print(NDArray.ndindex(new int[]{1, 5, 2}));
 
-        print(NDArray.broadcast_shapes(new int[][]{{1,2},{3,1}, {2, 3,2}}));
+        print(NDArray.broadcast_shapes(new int[][]{{1, 2}, {3, 1}, {2, 3, 2}}));
         print(NDArray.broadcast_shapes());
 
-        x1 = NDArray.arange(0,9,1).astype(NDArray::Double).reshape(new int[]{3, 3});
-        x2 = NDArray.arange(0,3,1).astype(NDArray::Double);
+        x1 = NDArray.arange(0, 9, 1).astype(NDArray::Double).reshape(new int[]{3, 3});
+        x2 = NDArray.arange(0, 3, 1).astype(NDArray::Double);
         print("x1: " + x1);
         print("x2: " + x2);
-        print("x1 - x2: "+ sub(x1, x2));
+        print("x1 - x2: " + sub(x1, x2));
 
         print("np.all([[True,False],[True,True]])", all(array(new Boolean[][]{{true, false}, {true, true}})));
         print("np.any([[True,False],[True,True]])", any(array(new Boolean[][]{{true, false}, {true, true}})));
@@ -160,8 +163,8 @@ public class Main {
         print("_view.item(new int[]{0})", _view.item(new int[]{5}));
         print(zeros(new int[]{1, 0}).size);
         print(r1);
-        print("item", r1.item(new int[]{0,1,0,2}));
-        print("item", r1.item(new int[]{0,1,0,2}));
+        print("item", r1.item(new int[]{0, 1, 0, 2}));
+        print("item", r1.item(new int[]{0, 1, 0, 2}));
         print(random(new int[]{1}).item(0));
 
         NDArray<Integer> ar = array(2);
@@ -192,31 +195,113 @@ public class Main {
         print(x1.reshape(new int[]{-1}));
 
         print(NDArray
-                .array(new Double[][]{{1.0,2.0,3.0},{3.0,1.0,4.0}, {2.0, 3.0,4.0}})
+                .array(new Double[][]{{1.0, 2.0, 3.0}, {3.0, 1.0, 4.0}, {2.0, 3.0, 4.0}})
                 .get(slice(), index(1))
-                .get(slice(0,-1))
-                .get(slice(null,null,-1))
-                .reshape(new int[]{2,-1,1,1})
+                .get(slice(0, -1))
+                .get(slice(null, null, -1))
+                .reshape(new int[]{2, -1, 1, 1})
 
         );
 
-        print(arange(50,0,-3));
+        print(arange(50, 0, -3));
 
-        NDArray<Integer> a1 = arange(10).reshape(new int[]{2,-1});
-        NDArray<Integer> a2 = arange(20).get(slice(null, 10)).reshape(new int[]{2,-1});
-        print(a1, a2, array_equal(a1,a2));
+        NDArray<Integer> a1 = arange(10).reshape(new int[]{2, -1});
+        NDArray<Integer> a2 = arange(20).get(slice(null, 10)).reshape(new int[]{2, -1});
+        print(a1, a2, array_equal(a1, a2));
 
         print(array_equal(array(a1.shape), array(a2.shape)));
         print(array_equal(
-                array(new Double[][]{{1.0,2.0,3.0},{3.0,1.0,4.0}, {2.0, 3.0,4.0}}),
-                array(new Double[][]{{1.0,2.0,3.0},{3.0,1.0,4.0}, {2.0, 3.0,4.0}})
+                array(new Double[][]{{1.0, 2.0, 3.0}, {3.0, 1.0, 4.0}, {2.0, 3.0, 4.0}}),
+                array(new Double[][]{{1.0, 2.0, 3.0}, {3.0, 1.0, 4.0}, {2.0, 3.0, 4.0}})
         ));
 
         print(array(a1.shape));
         print(equal(array(1), a2));
         print(equal(array(new int[]{1}), array(1)));
 
+        demo();
+
         print("END");
+    }
+
+    static void demo() {
+        NDArray<Integer> a = arange(15).reshape(new int[]{3, 5});
+        print("a = np.arange(15).reshape(3, 5)");
+        print("a", a);
+        print("a.shape", a.shape);
+        print("a.ndim", a.ndim);
+        print("a.size", a.size);
+        NDArray<Integer> b = array(new Integer[]{6, 7, 8});
+        print("b = np.array([6,7,8])");
+        print("b", b);
+
+
+        indexing();
+    }
+
+    static void indexing() {
+
+        print(">>>", "a = np.arange(10)**3");
+        NDArray<Double> a = arange(10).astype(NDArray::Double);
+        a = power(a, array(3).astype(NDArray::Double));
+
+        print(">>>", "a");
+        print(a);
+
+        print(">>>", "a[2]");
+        print(a.item(new int[]{2}));
+
+        print(">>>", "a[2:5]");
+        print(a.get(slice(2, 5)));
+
+        print(">>>", "a[:6:2] = 1000");
+        a.get(slice(null, 6, 2)).set(1000.0);
+
+        print(">>>", "a");
+        print(a);
+
+        print(">>>", "a[::-1]");
+        print(a.get(slice(null, null, -1)));
+
+        print(">>>", "for i in a:");
+        print("...", "\tprint(i**(1/3.))");
+        for (NDArray<Double> i : a) {
+            print(Math.pow(i.item(), 1 / 3.));
+        }
+
+        print(">>>", "def f(x,y):");
+        print("...", "\treturn 10*x+y");
+        print(">>>", "b = np.fromfunction(f,(5,4),dtype=int)");
+        NDArray<Integer> b = fromfunction((int[] index) -> 10 * index[0] + index[1], new int[]{5, 4});
+        print(">>>", "b");
+        print(b);
+
+        print(">>>", "b[2,3]");
+        print(b.item(new int[]{2, 3}));
+
+        print(">>>", "b[0:5, 1]");
+        print(b.get(slice(0, 5), index(1)));
+
+        print(">>>", "b[:,1]");
+        print(b.get(slice(), index(1)));
+
+        print(">>>", "b[1:3, :]");
+        print(b.get(slice(1, 3), slice()));
+
+        print(">>>", "b[-1]");
+        print(b.get(index(-1)));
+
+        print(">>>", "for row in b:");
+        print("...", "\tprint(row)");
+        for (NDArray<Integer> row : b) {
+            print(row);
+        }
+
+        print(">>>", "for element in b.flat:");
+        print("...", "\tprint(element)");
+        for (NDArray<Integer> element : b.flatten()) {
+            print(element);
+        }
     }
 
     public static void main(String[] args) {
