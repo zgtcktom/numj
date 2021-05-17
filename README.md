@@ -1,6 +1,7 @@
 # numj
 
 ## Indexing, Slicing and Iterating
+### One-dimensional
 Code:
 ```
 print(">>>", "a = np.arange(10)**3");
@@ -57,4 +58,89 @@ Outputs:
 6.999999999999999
 7.999999999999999
 8.999999999999998
+```
+
+### Multidimensional
+Code:
+```
+print(">>>", "def f(x,y):");
+print("...", "\treturn 10*x+y");
+print(">>>", "b = np.fromfunction(f,(5,4),dtype=int)");
+NDArray<Integer> b = fromfunction((int[] index) -> 10 * index[0] + index[1], new int[]{5, 4});
+print(">>>", "b");
+print(b);
+
+print(">>>", "b[2,3]");
+print(b.item(new int[]{2, 3}));
+
+print(">>>", "b[0:5, 1]");
+print(b.get(slice(0, 5), index(1)));
+
+print(">>>", "b[:,1]");
+print(b.get(slice(), index(1)));
+
+print(">>>", "b[1:3, :]");
+print(b.get(slice(1, 3), slice()));
+
+print(">>>", "b[-1]");
+print(b.get(index(-1)));
+
+print(">>>", "for row in b:");
+print("...", "\tprint(row)");
+for (NDArray<Integer> row : b) {
+    print(row);
+}
+
+print(">>>", "for element in b.flat:");
+print("...", "\tprint(element)");
+for (NDArray<Integer> element : b.flatten()) {
+    print(element);
+}
+```
+Outputs:
+```
+>>> def f(x,y):
+... 	return 10*x+y
+>>> b = np.fromfunction(f,(5,4),dtype=int)
+>>> b
+[[0, 1, 2, 3], [10, 11, 12, 13], [20, 21, 22, 23], [30, 31, 32, 33], [40, 41, 42, 43]]
+>>> b[2,3]
+23
+>>> b[0:5, 1]
+[1, 11, 21, 31, 41]
+>>> b[:,1]
+[1, 11, 21, 31, 41]
+>>> b[1:3, :]
+[[10, 11, 12, 13], [20, 21, 22, 23]]
+>>> b[-1]
+[40, 41, 42, 43]
+>>> for row in b:
+... 	print(row)
+[0, 1, 2, 3]
+[10, 11, 12, 13]
+[20, 21, 22, 23]
+[30, 31, 32, 33]
+[40, 41, 42, 43]
+>>> for element in b.flat:
+... 	print(element)
+0
+1
+2
+3
+10
+11
+12
+13
+20
+21
+22
+23
+30
+31
+32
+33
+40
+41
+42
+43
 ```
