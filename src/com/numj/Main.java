@@ -229,6 +229,9 @@ public class Main {
         print(ax);
         print(ax.transpose());
 
+        _sum();
+        _mean();
+
         print("END");
     }
 
@@ -245,6 +248,46 @@ public class Main {
 
 
         indexing();
+    }
+
+    static void _sum(){
+        print(">>>", "np.sum([0.5, 1.5])");
+        print(sum(array(new double[]{0.5,1.5})));
+
+        print(">>>", "np.sum([[0, 1], [0, 5]])");
+        print(sum(array(new double[][]{{0.,1.},{0.,5.}})));
+
+        print(">>>","np.sum([[0, 1], [0, 5]], axis=0)");
+        print(sum(array(new double[][]{{0.,1.},{0.,5.}}), 0));
+
+        print(">>>","np.sum([[0, 1], [0, 5]], axis=1)");
+        print(sum(array(new double[][]{{0.,1.},{0.,5.}}), 1));
+
+        print(">>>", "c = np.arange(2*3*4*5).reshape(2,3,4,5)");
+        NDArray<Double> c = arange(2 * 3 * 4 * 5).astype(NDArray::Double).reshape(new int[]{2, 3, 4, 5});
+
+        print(">>>", "np.sum(c)");
+        print(sum(c));
+
+        print(">>>", "np.sum(c, axis=2)");
+        print(sum(c, 2));
+
+        print(">>>", "np.sum(c, axis=(0,2))");
+        print(sum(c, new int[]{0, 2}));
+
+        print(">>>", "np.sum(c, axis=(0,1,2))");
+        print(sum(c, new int[]{0, 1, 2}));
+    }
+
+    static void _mean(){
+        print(">>>", "a = np.array([[1, 2], [3, 4]])");
+        NDArray<Double> a = array(new Double[][]{{1., 2.}, {3., 4.}});
+        print(">>>","np.mean(a)");
+        print(mean(a));
+        print(">>>", "np.mean(a, axis=0)");
+        print(mean(a, 0));
+        print(">>>","np.mean(a, axis=1)");
+        print(mean(a, 1));
     }
 
     static void indexing() {
@@ -307,7 +350,7 @@ public class Main {
 
         print(">>>", "for element in b.flat:");
         print("...", "\tprint(element)");
-        for (NDArray<Integer> element : b.flatten()) {
+        for (Integer element : b.flat()) {
             print(element);
         }
     }

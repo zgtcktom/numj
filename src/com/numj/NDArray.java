@@ -10,6 +10,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
 
     private static final Random rand = new Random();
     private static final int[] EMPTY = new int[0];
+    private static final Slice ALL = slice();
     public final TypedArray<T> data;
     public final int[] shape;
     public final int ndim;
@@ -136,6 +137,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         deepCopy(arr, ndarray, 0, 0);
         return ndarray;
     }
+
 
     private static int getLength(int start, int stop, int step) {
         int length;
@@ -382,14 +384,11 @@ class NDArray<T> implements Iterable<NDArray<T>> {
 
     static public Double mean(NDArray<Double> ndarray) {
         Double total = 0.0;
-        int count = 0;
         for (int[] index : ndindex(ndarray.shape)) {
-            Double value = ndarray.item(index);
-            total += value;
-            count++;
+            total += ndarray.item(index);
         }
-        if (count > 0)
-            return total / count;
+        if (ndarray.size > 0)
+            return total / ndarray.size;
         return null;
     }
 
@@ -437,6 +436,63 @@ class NDArray<T> implements Iterable<NDArray<T>> {
             else max = Math.max(max, value);
         }
         return max;
+    }
+
+    public static Double sum(NDArray<Double> ndarray) {
+        Double sum = 0.;
+        for (Double value : ndarray.flat()) sum += value;
+        return sum;
+    }
+
+    public static NDArray<Double> sum(NDArray<Double> ndarray, int axis) {
+        return useAxis(ndarray, axis, NDArray::sum);
+    }
+
+    public static NDArray<Double> sum(NDArray<Double> ndarray, int[] axes) {
+        return useAxis(ndarray, axes, NDArray::sum);
+    }
+
+    public static boolean isin(int[] array, int value) {
+        for (int element : array) {
+            if (element == value) return true;
+        }
+        return false;
+    }
+
+    private static <T, E> NDArray<T> useAxis(NDArray<E> ndarray, int[] axes, Function<NDArray<E>, T> func) {
+        int[] shape = new int[ndarray.ndim - axes.length];
+        Selection[] selections = new Selection[ndarray.ndim];
+        for (int i = 0, j = 0; i < ndarray.ndim; i++) {
+            if (isin(axes, i)) selections[i] = ALL;
+            else shape[j++] = ndarray.shape[i];
+        }
+
+        NDArray<T> out = new NDArray<>(shape);
+        for (int[] index : ndindex(shape)) {
+            for (int i = 0, j = 0; i < ndarray.ndim; i++) {
+                if (!isin(axes, i)) selections[i] = index(index[j++]);
+            }
+            out.itemset(index, func.apply(ndarray.get(selections)));
+        }
+        return out;
+    }
+
+    private static <T, E> NDArray<T> useAxis(NDArray<E> ndarray, int axis, Function<NDArray<E>, T> func) {
+        int[] shape = new int[ndarray.ndim - 1];
+        Selection[] selections = new Selection[ndarray.ndim];
+        for (int i = 0, j = 0; i < ndarray.ndim; i++) {
+            if (axis == i) selections[i] = ALL;
+            else shape[j++] = ndarray.shape[i];
+        }
+
+        NDArray<T> out = new NDArray<>(shape);
+        for (int[] index : ndindex(shape)) {
+            for (int i = 0, j = 0; i < ndarray.ndim; i++) {
+                if (axis != i) selections[i] = index(index[j++]);
+            }
+            out.itemset(index, func.apply(ndarray.get(selections)));
+        }
+        return out;
     }
 
     static public int argmax(NDArray<Double> ndarray) {
@@ -621,6 +677,10 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         data.set(itemindex(index), value);
     }
 
+    public void itemset(T value) {
+        data.set(itemindex(EMPTY), value);
+    }
+
     public NDArray<T> get(Selection... selections) {
         if (selections.length > shape.length) throw new RuntimeException();
         List<Offset> offsetList = new ArrayList<>();
@@ -736,7 +796,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         }
     }
 
-    public NDArray<T> transpose(){
+    public NDArray<T> transpose() {
         int[] strides = new int[this.strides.length];
         Offset[] offsets = new Offset[this.offsets.length];
         for (int i = 0; i < strides.length; i++) {
@@ -762,6 +822,10 @@ class NDArray<T> implements Iterable<NDArray<T>> {
                 itemset(indices[0], src.item(indices[1]));
             }
         }
+    }
+
+    public Flatiter<T> flat() {
+        return new Flatiter<>(this);
     }
 
     private static class ElementIterator<T> implements Iterator<NDArray<T>> {
@@ -1045,6 +1109,36 @@ class NDArray<T> implements Iterable<NDArray<T>> {
                     }
                 }
                 return out;
+            }
+        }
+    }
+
+    public static class Flatiter<T> implements Iterable<T> {
+        private final NDArray<T> ndarray;
+
+        public Flatiter(NDArray<T> ndArray) {
+            this.ndarray = ndArray;
+        }
+
+        public Iterator<T> iterator() {
+            return new FlatIterator<>(this);
+        }
+
+        private static class FlatIterator<T> implements Iterator<T> {
+            private final Flatiter<T> flatiter;
+            private final Iterator<int[]> iterator;
+
+            public FlatIterator(Flatiter<T> flatiter) {
+                this.flatiter = flatiter;
+                this.iterator = ndindex(flatiter.ndarray.shape).iterator();
+            }
+
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            public T next() {
+                return flatiter.ndarray.item(iterator.next());
             }
         }
     }
