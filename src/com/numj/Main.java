@@ -221,6 +221,14 @@ public class Main {
 
         demo();
 
+        NDArray<Double> ax = arange(18).astype(NDArray::Double);
+        ax = power(ax, array(3).astype(NDArray::Double));
+        ax = ax.reshape(new int[]{-1,3,2}).copy();
+        ax = ax.get(slice(), slice(null, -1));
+        ax.transpose().set(new int[]{0,1,0}, -99.);
+        print(ax);
+        print(ax.transpose());
+
         print("END");
     }
 

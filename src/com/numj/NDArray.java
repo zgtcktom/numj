@@ -736,6 +736,16 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         }
     }
 
+    public NDArray<T> transpose(){
+        int[] strides = new int[this.strides.length];
+        Offset[] offsets = new Offset[this.offsets.length];
+        for (int i = 0; i < strides.length; i++) {
+            strides[i] = this.strides[strides.length - 1 - i];
+            offsets[i] = this.offsets[offsets.length - 1 - i];
+        }
+        return new NDArray<>(this, offsets, strides);
+    }
+
     public void set(Selection[] selections, NDArray<T> src) {
         get(selections).set(src);
     }
