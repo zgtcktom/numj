@@ -5,40 +5,117 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+
 class NDArray<T> {
 
-    static Random rand = new Random();
-    final TypedArray<T> data;
-    public int[] shape;
-    Offset[] offsets;
-    private Index index = new Index(0);
+    private static final Random rand = new Random();
+    public final TypedArray<T> data;
+    public final int[] shape;
+    public final int ndim;
+    public final int size;
+    public final NDArray<T> base;
+    private final int[] strides;
+    private final Offset[] offsets;
 
     public NDArray(int[] shape) {
-        this.data = new TypedArray<>(shape);
-        this.offsets = null;
+        this(shape, null);
+    }
+
+    private NDArray(int[] shape, TypedArray<T> data) {
         this.shape = shape;
-    }
-
-    public NDArray(TypedArray<T> data, Offset[] offsets) {
+        ndim = shape.length;
+        strides = new int[ndim];
+        int size = 1;
+        for (int i = strides.length - 1; i >= 0; i--) {
+            strides[i] = size;
+            size *= shape[i];
+        }
+        this.size = size;
+        if (data == null) data = new TypedArray<>(size);
         this.data = data;
+        base = null;
+        offsets = new Offset[ndim];
+        for (int i = 0; i < offsets.length; i++) {
+            offsets[i] = new Slicing(0, shape[i], 1, shape[i]);
+        }
+    }
+
+    private NDArray(NDArray<T> base, Offset[] offsets, int[] strides) {
         this.offsets = offsets;
-        this.shape = shape();
+        this.base = base.base != null ? base.base : base;
+        this.strides = strides;
+        data = base.data;
+
+        int ndim = 0;
+        for (Offset offset : offsets) ndim += offset.ndim;
+        int size = 1;
+        int[] shape = new int[ndim];
+        for (int i = 0, j = 0; i < offsets.length; i++) {
+            if (offsets[i].ndim != 0) {
+                shape[j] = offsets[i].length;
+                size *= offsets[i].length;
+                j++;
+            }
+        }
+        this.ndim = ndim;
+        this.shape = shape;
+        this.size = size;
     }
 
-    public static Index index(int ind) {
-        return new Index(ind);
+    @SuppressWarnings("unchecked")
+    public static <T> void deepCopy(Object[] arr, NDArray<T> ndarray, int dim, int start) {
+        for (int i = 0; i < arr.length; i++) {
+            if (dim < ndarray.ndim - 1) {
+                deepCopy(
+                        (Object[]) arr[i],
+                        ndarray,
+                        dim + 1,
+                        start + i * ndarray.strides[dim]
+                );
+            } else {
+                ndarray.itemset(start + i, (T) arr[i]);
+            }
+        }
     }
 
-    public static Slice slice() {
-        return new Slice(null, null, 1);
+    public static NDArray<Integer> array(int[] arr) {
+        int n = arr.length;
+        NDArray<Integer> out = new NDArray<>(new int[]{n});
+        for (int i = 0; i < n; i++) {
+            out.itemset(i, arr[i]);
+        }
+        return out;
     }
 
-    public static Slice slice(Integer start, Integer stop) {
-        return new Slice(start, stop, 1);
+    public static NDArray<Integer> array(int[][] arr) {
+        int n = arr.length, m = arr[0].length;
+        NDArray<Integer> out = new NDArray<>(new int[]{n, m});
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                out.itemset(i * m + j, arr[i][j]);
+            }
+        }
+        return out;
     }
 
-    public static Slice slice(Integer start, Integer stop, Integer step) {
-        return new Slice(start, stop, step);
+    public static NDArray<Double> array(double[] arr) {
+        int n = arr.length;
+        NDArray<Double> out = new NDArray<>(new int[]{n});
+        for (int i = 0; i < n; i++) {
+            out.itemset(i, arr[i]);
+        }
+        return out;
+    }
+
+    public static NDArray<Double> array(double[][] arr) {
+        int n = arr.length, m = arr[0].length;
+        NDArray<Double> out = new NDArray<>(new int[]{n, m});
+        for (int i = 0; i < n; i++) {
+            for (int j = 0; j < m; j++) {
+                out.itemset(i * m + j, arr[i][j]);
+            }
+        }
+        return out;
     }
 
     public static <T> NDArray<T> array(Object[] arr) {
@@ -59,24 +136,72 @@ class NDArray<T> {
         return ndarray;
     }
 
-    @SuppressWarnings("unchecked")
-    public static <T> void deepCopy(Object[] arr, NDArray<T> ndarray, int dim, int start) {
-        for (int i = 0; i < arr.length; i++) {
-            if (dim < ndarray.shape.length - 1) {
-                deepCopy((Object[]) arr[i], ndarray, dim + 1, start + i * ndarray.length(dim + 1));
-            } else {
-                ndarray.data(start + i, (T) arr[i]);
-            }
+    private static int getLength(int start, int stop, int step) {
+        int length;
+        if ((step == 0) || (step < 0 && stop >= start) || (step > 0 && start >= stop)) {
+            length = 0;
+        } else if (step < 0) {
+            length = (stop - start + 1) / step + 1;
+        } else {
+            length = (stop - start - 1) / step + 1;
         }
+        return length;
+    }
+
+    public static NDArray<Integer> arange(int stop) {
+        return arange(0, stop, 1);
+    }
+
+    public static NDArray<Integer> arange(int start, int stop) {
+        return arange(start, stop, 1);
+    }
+
+    public static NDArray<Integer> arange(int start, int stop, int step) {
+        int length = getLength(start, stop, step);
+        NDArray<Integer> ndarray = new NDArray<>(new int[]{length});
+        for (int i = 0, j = start; i < length; i++, j += step) {
+            ndarray.itemset(i, j);
+        }
+        return ndarray;
+    }
+
+    public static int prod(int[] arr) {
+        int out = 1;
+        for (int val : arr) {
+            out *= val;
+        }
+        return out;
+    }
+
+    public static Index index(int ind) {
+        return new Index(ind);
+    }
+
+    public static Slice slice() {
+        return new Slice(null, null, 1);
+    }
+
+    public static Slice slice(Integer start, Integer stop) {
+        return new Slice(start, stop, 1);
+    }
+
+    public static Slice slice(Integer start, Integer stop, Integer step) {
+        return new Slice(start, stop, step);
+    }
+
+    public static <T> NDArray<T> array(T value) {
+        NDArray<T> out = new NDArray<>(new int[]{});
+        out.itemset(0, value);
+        return out;
     }
 
     static public <T, E> NDArray<E> apply(NDArray<T> a, NDArray<T> b, BiFunction<T, T, E> func) {
-        Broadcast<T> bc = new Broadcast<>(a, b);
-        if (bc.shape == null) return null;
-        NDArray<E> out = new NDArray<>(bc.shape);
-        for (int i = 0; bc.hasNext(); i++) {
-            int[][] indices = bc.next();
-            out.data(i, func.apply(a.getValue(indices[0]), b.getValue(indices[1])));
+        Broadcast broadcast = broadcast(a, b);
+        NDArray<E> out = new NDArray<>(broadcast.shape);
+        int i = 0;
+        for (int[][] indices : broadcast) {
+            out.itemset(i, func.apply(a.item(indices[0]), b.item(indices[1])));
+            i++;
         }
         return out;
     }
@@ -123,52 +248,46 @@ class NDArray<T> {
 
     static public NDArray<Double> zeros(int[] shape) {
         NDArray<Double> ndarray = new NDArray<>(shape);
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            ndarray.setValue(indices, 0.0);
+        for (int[] index : ndindex(ndarray.shape)) {
+            ndarray.itemset(index, 0.0);
         }
         return ndarray;
     }
 
     static public Boolean all(NDArray<Boolean> ndarray) {
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            if (!ndarray.getValue(indices)) return false;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if (!ndarray.item(index)) return false;
         }
         return true;
     }
 
     static public Boolean any(NDArray<Boolean> ndarray) {
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            if (ndarray.getValue(indices)) return true;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if (ndarray.item(index)) return true;
         }
         return false;
     }
 
     static public NDArray<Double> ones(int[] shape) {
         NDArray<Double> ndarray = new NDArray<>(shape);
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            ndarray.setValue(indices, 1.0);
+        for (int[] index : ndindex(ndarray.shape)) {
+            ndarray.itemset(index, 1.0);
         }
         return ndarray;
     }
 
     static public NDArray<Double> random(int[] shape) {
         NDArray<Double> ndarray = new NDArray<>(shape);
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            ndarray.setValue(indices, rand.nextDouble());
+        for (int[] index : ndindex(ndarray.shape)) {
+            ndarray.itemset(index, rand.nextDouble());
         }
         return ndarray;
     }
 
     static public Double amin(NDArray<Double> ndarray) {
         Double min = null;
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
             if (min == null) min = value;
             else min = Math.min(min, value);
         }
@@ -177,12 +296,11 @@ class NDArray<T> {
 
     static public NDArray<Double> nan_to_num(NDArray<Double> ndarray) {
         NDArray<Double> out = ndarray.copy();
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
             if (value == null || Double.isNaN(value))
                 value = 0.0;
-            out.setValue(indices, value);
+            out.itemset(index, value);
         }
         return out;
     }
@@ -199,18 +317,17 @@ class NDArray<T> {
         NDArray<Double> out = new NDArray<>(shape);
 
         int[] outIndices = new int[out.shape.length];
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            if (indices[axis] != 0) continue;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if (index[axis] != 0) continue;
             for (int i = 0, j = 0; i < selections.length; i++) {
                 if (i == axis) selections[i] = slice();
                 else {
-                    selections[i] = index(indices[i]);
-                    outIndices[j] = indices[i];
+                    selections[i] = index(index[i]);
+                    outIndices[j] = index[i];
                     j++;
                 }
             }
-            out.setValue(outIndices, amin(ndarray.get(selections)));
+            out.itemset(outIndices, amin(ndarray.get(selections)));
         }
         return out;
     }
@@ -227,18 +344,17 @@ class NDArray<T> {
         NDArray<Double> out = new NDArray<>(shape);
 
         int[] outIndices = new int[out.shape.length];
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            if (indices[axis] != 0) continue;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if (index[axis] != 0) continue;
             for (int i = 0, j = 0; i < selections.length; i++) {
                 if (i == axis) selections[i] = slice();
                 else {
-                    selections[i] = index(indices[i]);
-                    outIndices[j] = indices[i];
+                    selections[i] = index(index[i]);
+                    outIndices[j] = index[i];
                     j++;
                 }
             }
-            out.setValue(outIndices, mean(ndarray.get(selections)));
+            out.itemset(outIndices, mean(ndarray.get(selections)));
         }
         return out;
     }
@@ -246,9 +362,8 @@ class NDArray<T> {
     static public Double mean(NDArray<Double> ndarray) {
         Double total = 0.0;
         int count = 0;
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
             total += value;
             count++;
         }
@@ -259,10 +374,9 @@ class NDArray<T> {
 
     static public NDArray<Double> abs(NDArray<Double> ndarray) {
         NDArray<Double> out = new NDArray<>(ndarray.shape);
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
-            out.setValue(indices, Math.abs(value));
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
+            out.itemset(index, Math.abs(value));
         }
         return out;
     }
@@ -279,27 +393,25 @@ class NDArray<T> {
         NDArray<Double> out = new NDArray<>(shape);
 
         int[] outIndices = new int[out.shape.length];
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            if (indices[axis] != 0) continue;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if (index[axis] != 0) continue;
             for (int i = 0, j = 0; i < selections.length; i++) {
                 if (i == axis) selections[i] = slice();
                 else {
-                    selections[i] = index(indices[i]);
-                    outIndices[j] = indices[i];
+                    selections[i] = index(index[i]);
+                    outIndices[j] = index[i];
                     j++;
                 }
             }
-            out.setValue(outIndices, amax(ndarray.get(selections)));
+            out.itemset(outIndices, amax(ndarray.get(selections)));
         }
         return out;
     }
 
     static public Double amax(NDArray<Double> ndarray) {
         Double max = null;
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
             if (max == null) max = value;
             else max = Math.max(max, value);
         }
@@ -308,40 +420,20 @@ class NDArray<T> {
 
     static public int argmax(NDArray<Double> ndarray) {
         Double max = null;
-        int index = -1;
+        int ind = -1;
         int i = 0;
-        for (Iterator<int[]> it = ndarray.indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            Double value = ndarray.getValue(indices);
+        for (int[] index : ndindex(ndarray.shape)) {
+            Double value = ndarray.item(index);
             if (max == null || value > max) {
                 max = value;
-                index = i;
+                ind = i;
             }
             i++;
         }
-        return index;
+        return ind;
     }
 
-    static public NDArray<Integer> arange(int start, int stop, int step) {
-
-        int length;
-        if ((step == 0) || (step < 0 && stop >= start) || (step > 0 && start >= stop)) {
-            length = 0;
-        } else if (step < 0) {
-            length = (stop - start + 1) / (step) + 1;
-        } else {
-            length = (stop - start - 1) / (step) + 1;
-        }
-
-        Integer[] data = new Integer[length];
-
-        for (int i = start, j = 0; i < stop; i += step, j++) {
-            data[j] = i;
-        }
-
-        return array(data);
-    }
-
+    @SafeVarargs
     static public <T> NDArray<T> concat(NDArray<T>... ndarrays) {
         int length = 0;
         for (NDArray<T> ndarray : ndarrays) {
@@ -371,17 +463,15 @@ class NDArray<T> {
         StringBuilder string = new StringBuilder();
         for (Object arg : args) {
             if (string.length() != 0) string.append(" ");
-            string.append(arg.toString());
+            String str;
+            if (arg instanceof int[]) {
+                str = Arrays.toString((int[]) arg);
+            } else {
+                str = arg.toString();
+            }
+            string.append(str);
         }
         System.out.println(string.toString());
-    }
-
-    private static int[] toArray(List<Integer> list) {
-        int[] array = new int[list.size()];
-        for (int i = 0; i < array.length; i++) {
-            array[i] = list.get(i);
-        }
-        return array;
     }
 
     static Double Double(Float n) {
@@ -416,205 +506,393 @@ class NDArray<T> {
         return n != 0;
     }
 
-    public NDArray<T> view() {
-        return new NDArray<>(data, offsets);
+    static NdIndex ndindex(int[] shape) {
+        return new NdIndex(shape);
     }
 
-    public NDArray<T> copy() {
-        NDArray<T> ndarray = new NDArray<>(shape);
-        for (Iterator<int[]> it = indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            ndarray.setValue(indices, getValue(indices));
-        }
-        return ndarray;
-    }
+    static public int[] broadcast_shapes(int[]... shapes) {
+        int ndim = 0;
+        for (int[] shape : shapes) ndim = Math.max(shape.length, ndim);
 
-    public NDArray<T> reshape(int[] shape) {
-        NDArray<T> ndarray = copy();
-        int unknown = -1;
-        int size = length(0);
-        int rest = 1;
-        int[] _shape = new int[shape.length];
-        for (int i = 0; i < shape.length; i++) {
-            int dim = shape[i];
-            _shape[i] = dim;
-            if (dim == -1) {
-                if (unknown != -1) return null;
-                unknown = i;
-            } else {
-                rest *= dim;
+        int[] out = new int[ndim];
+        for (int i = 0; i < ndim; i++) {
+            int m = ndim - 1 - i;
+            out[m] = 1;
+            for (int[] shape : shapes) {
+                int n = shape.length - 1 - i;
+                if (n < 0) continue;
+                if (out[m] == 1) out[m] = shape[n];
+                else if (shape[n] != 1 && shape[n] != out[m]) return null;
             }
         }
-        if (unknown != -1) {
-            if (size % rest != 0) return null;
-            _shape[unknown] = size / rest;
-        }
-
-        ndarray.data.shape = _shape;
-        ndarray.shape = ndarray.shape();
-        return ndarray;
+        return out;
     }
 
-    public T data(int index) {
+    public static Broadcast broadcast(NDArray<?>... ndarrays) {
+        return new Broadcast(ndarrays);
+    }
+
+    public static <T> Boolean array_equal(T a, T b) {
+        return a.equals(b);
+    }
+
+    public static Boolean array_equal(int[] a, int[] b) {
+        return Arrays.equals(a, b);
+    }
+
+    public static Boolean array_equal(Object[] a, Object[] b) {
+        return array_equal(array(a), array(b));
+    }
+
+    public static <T> Boolean array_equal(NDArray<T> a, NDArray<T> b) {
+        if (a == b) return true;
+        if (a.ndim != b.ndim || !Arrays.equals(a.shape, b.shape)) return false;
+        for (int[] index : ndindex(a.shape)) {
+            if (!array_equal(a.item(index), b.item(index))) return false;
+        }
+        return true;
+    }
+
+    public static <T> NDArray<Boolean> equal(NDArray<T> a, NDArray<T> b) {
+        Broadcast broadcast = broadcast(a, b);
+        NDArray<Boolean> out = new NDArray<>(broadcast.shape);
+        int i = 0;
+        for (int[][] indices : broadcast) {
+            out.itemset(i, array_equal(a.item(indices[0]), b.item(indices[1])));
+            i++;
+        }
+        return out;
+    }
+
+    public T item(int index) {
         return data.get(index);
     }
 
-    public void data(int index, T value) {
-        data.set(index, value);
+    public T item(int[] index) {
+        return data.get(itemindex(index));
     }
 
-    public int length(int dim) {
-        if (dim >= shape.length) return 1;
-        return shape[dim] * length(dim + 1);
-    }
-
-    public NDArray<T> get(int ind) {
-        index.ind = ind;
-        return get(index);
-    }
-
-    public NDArray<T> get(Selection... selections) {
-        if (selections.length > shape.length) return null;
-        if (offsets == null) offsets = offsets();
-        List<Offset> offsetList = new ArrayList<>();
-
-        for (int i = 0, j = 0; i < offsets.length; i++) {
-            if (offsets[i] instanceof Slicing) {
-                Slicing slicing = (Slicing) offsets[i];
-                if (j < selections.length) {
-                    if (selections[j] instanceof Slice) {
-                        // Slicing, slice
-                        Slice slice = (Slice) selections[j];
-                        offsetList.add(slicing.get(slice));
-                    } else {
-                        // Slicing, index
-                        Index index = (Index) selections[j];
-                        offsetList.add(slicing.get(index));
-                    }
-                    j++;
-                } else {
-                    // Slicing, copy
-                    offsetList.add(slicing);
-                }
-            } else {
-                // Indexing, copy
-                Indexing indexing = (Indexing) offsets[i];
-                offsetList.add(indexing);
-            }
-        }
-
-        Offset[] offsets = offsetList.toArray(new Offset[0]);
-        return new NDArray<>(data, offsets);
-    }
-
-    public void set(NDArray<T> src) {
-        if (!Arrays.equals(shape, src.shape)) {
-            Broadcast<T> bc = new Broadcast<>(this, src);
-            if (bc.shape == null || !Arrays.equals(bc.shape, shape)) return;
-            for (int i = 0; bc.hasNext(); i++) {
-                int[][] indices = bc.next();
-                setValue(indices[0], src.getValue(indices[1]));
-            }
-            return;
-        }
-        for (Iterator<int[]> it = indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            setValue(indices, src.getValue(indices));
-        }
-    }
-
-    private int[] shape() {
-        if (offsets == null) return data.shape;
-        List<Integer> shapeList = new ArrayList<>();
-        for (Offset offset : offsets) {
-            if (offset instanceof Slicing) {
-                Slicing slicing = (Slicing) offset;
-                shapeList.add(slicing.length);
-            }
-        }
-        return toArray(shapeList);
-    }
-
-    private Offset[] offsets() {
-        int N = data.shape.length;
-        Offset[] offsets = new Offset[N];
-        for (int i = 0; i < N; i++) {
-            offsets[i] = slice().slicing(data.shape[i]);
-        }
-        return offsets;
-    }
-
-    private int getIndex(int[] indices) {
-        if (indices.length != shape.length) return -1;
-
+    private int itemindex(int[] index) {
+        if (index.length != ndim) throw new ArrayIndexOutOfBoundsException();
         int ind = 0;
-        int length = 1;
-        for (int i = data.shape.length - 1, j = indices.length - 1; i >= 0; i--) {
+        for (int i = 0, j = 0; i < offsets.length; i++) {
             int n;
-            if (offsets != null) {
-                if (offsets[i] instanceof Slicing) {
-                    Slicing slicing = (Slicing) offsets[i];
-                    n = slicing.get(indices[j]);
-                    j--;
-                } else {
-                    Indexing indexing = (Indexing) offsets[i];
-                    n = indexing.get();
-                }
-            } else {
-                n = indices[i];
+            if (offsets[i].ndim == 0) { // Indexing
+                n = offsets[i].get();
+            } else { // Slicing
+                n = offsets[i].get(index[j]);
+                j++;
             }
-            ind += n * length;
-            length *= data.shape[i];
+            ind += n * strides[i];
         }
-
         return ind;
     }
 
-    public T getValue(int[] indices) {
-        int ind = getIndex(indices);
-        if (ind == -1) return null;
-
-        return data(ind);
+    public void itemset(int index, T value) {
+        data.set(index, value);
     }
 
-    public void setValue(int[] indices, T value) {
-        int ind = getIndex(indices);
-        if (ind == -1) return;
-
-        data(ind, value);
+    public void itemset(int[] index, T value) {
+        data.set(itemindex(index), value);
     }
 
-    public <E> NDArray<E> astype(Function<T, E> valueOf) {
-        NDArray<E> ndarray = new NDArray<>(shape);
-        for (Iterator<int[]> it = indexIterator(); it.hasNext(); ) {
-            int[] indices = it.next();
-            ndarray.setValue(indices, valueOf.apply(getValue(indices)));
+    public NDArray<T> get(Selection... selections) {
+        if (selections.length > shape.length) throw new RuntimeException();
+        List<Offset> offsetList = new ArrayList<>();
+
+        for (int i = 0, j = 0; i < offsets.length; i++) {
+            Offset offset = offsets[i];
+            if (offset.ndim != 0 && j < selections.length) {
+                offset = offset.get(selections[j++]);
+            }
+            offsetList.add(offset);
         }
-        return ndarray;
+        Offset[] offsets = offsetList.toArray(new Offset[0]);
+        return new NDArray<>(this, offsets, strides);
     }
 
     public String toString() {
-        if (shape.length == 0) return data(0).toString();
+        if (ndim == 0) return "" + item(new int[0]);
 
         StringBuilder string = new StringBuilder();
-        if (shape.length == 1) {
-            int[] indices = new int[1];
+        if (ndim == 1) {
+            int[] index = new int[1];
             for (int i = 0; i < shape[0]; i++) {
                 if (string.length() > 0) string.append(", ");
-                indices[0] = i;
-                string.append(getValue(indices));
+                index[0] = i;
+                string.append(item(index));
             }
         } else {
             for (int i = 0; i < shape[0]; i++) {
                 if (string.length() > 0) string.append(", ");
-                string.append(get(index(i)));
+                string.append(get(new Index(i)));
             }
         }
         return "[" + string + "]";
     }
 
-    public Iterator<int[]> indexIterator() {
-        return new IndexIterator(shape);
+    public <E> NDArray<E> astype(Function<T, E> valueOf) {
+        NDArray<E> ndarray = new NDArray<>(shape);
+        for (int[] index : ndindex(shape)) {
+            ndarray.itemset(index, valueOf.apply(item(index)));
+        }
+        return ndarray;
+    }
+
+    public NDArray<T> view() {
+        return new NDArray<>(this, offsets, strides);
+    }
+
+    public NDArray<T> copy() {
+        NDArray<T> out = new NDArray<>(shape);
+        out.set(this);
+        return out;
+    }
+
+    public NDArray<T> reshape(int[] shape) {
+        int unknown = -1;
+        int rest = 1;
+        shape = Arrays.copyOf(shape, shape.length);
+        for (int i = 0; i < shape.length; i++) {
+            if (shape[i] == -1) {
+                if (unknown != -1) throw new RuntimeException();
+                unknown = i;
+            } else {
+                rest *= shape[i];
+            }
+        }
+        if (rest == 0) throw new RuntimeException();
+        if (unknown != -1) {
+            if (size % rest != 0) throw new RuntimeException();
+            shape[unknown] = size / rest;
+        }
+        return new NDArray<>(shape, copy().data);
+    }
+
+    public void fill(T value) {
+        for (int[] index : ndindex(shape)) {
+            itemset(index, value);
+        }
+    }
+
+    public NDArray<T> flatten() {
+        NDArray<T> out = new NDArray<>(new int[]{size});
+        if (size == 1) {
+            out.itemset(0, item(0));
+        } else {
+            int i = 0;
+            for (int[] index : ndindex(shape)) {
+                out.itemset(i, item(index));
+                i++;
+            }
+        }
+        return out;
+    }
+
+    public void set(int[] index, T value) {
+        itemset(index, value);
+    }
+
+    public void set(Selection[] selections, T value) {
+        get(selections).set(value);
+    }
+
+    public void set(T value) {
+        if (size == 1) {
+            itemset(0, value);
+        } else {
+            for (int[] index : ndindex(shape)) {
+                itemset(index, value);
+            }
+        }
+    }
+
+    public void set(Selection[] selections, NDArray<T> src) {
+        get(selections).set(src);
+    }
+
+    public void set(NDArray<T> src) {
+        if (Arrays.equals(shape, src.shape)) {
+            for (int[] index : ndindex(shape)) {
+                itemset(index, src.item(index));
+            }
+        } else {
+            Broadcast broadcast = broadcast(this, src);
+            if (!Arrays.equals(broadcast.shape, shape)) throw new RuntimeException();
+            for (int[][] indices : broadcast) {
+                itemset(indices[0], src.item(indices[1]));
+            }
+        }
+    }
+
+    static abstract class Selection {
+    }
+
+    static public class Index extends Selection {
+        int index;
+
+        public Index(int index) {
+            this.index = index;
+        }
+
+        public Indexing indexing(int length) {
+            return new Indexing(index < 0 ? index + length : index);
+        }
+
+        public String toString() {
+            return String.valueOf(index);
+        }
+    }
+
+    static public class Slice extends Selection {
+        Integer start, stop, step;
+
+        public Slice(Integer start, Integer stop, Integer step) {
+            this.start = start;
+            this.stop = stop;
+            this.step = step;
+        }
+
+        public Slicing slicing(int length) {
+            Integer start = this.start, stop = this.stop, step = this.step;
+
+            if (step == null) {
+                step = 1;
+            }
+
+            int defStart = step < 0 ? length - 1 : 0;
+            int defStop = step < 0 ? -1 : length;
+
+            if (start == null) {
+                start = defStart;
+            } else {
+                if (start < 0) start += length;
+                if (start < 0) start = step < 0 ? -1 : 0;
+                if (start >= length) start = step < 0 ? length - 1 : length;
+            }
+
+            if (stop == null) {
+                stop = defStop;
+            } else {
+                if (stop < 0) stop += length;
+                if (stop < 0) stop = step < 0 ? -1 : 0;
+                if (stop >= length) stop = step < 0 ? length - 1 : length;
+            }
+
+            int sliceLength;
+            if ((step == 0) || (step < 0 && stop >= start) || (step > 0 && start >= stop)) {
+                sliceLength = 0;
+            } else if (step < 0) {
+                sliceLength = (stop - start + 1) / (step) + 1;
+            } else {
+                sliceLength = (stop - start - 1) / (step) + 1;
+            }
+
+            return new Slicing(start, stop, step, sliceLength);
+        }
+
+        public String toString() {
+            return start + ":" + stop + ":" + step;
+        }
+    }
+
+    private static abstract class Offset {
+        // Slicing {start, stop, step}
+        // Indexing {index}
+        public int ndim;
+        public int length;
+
+        public Offset(int ndim, int length) {
+            this.ndim = ndim;
+            this.length = length;
+        }
+
+        public Offset get(Selection selection) {
+            return null;
+        }
+
+        public int get(int index) {
+            return 0;
+        }
+
+        public int get() {
+            return 0;
+        }
+    }
+
+    private static class Indexing extends Offset {
+        private final int index;
+
+        public Indexing(int index) {
+            super(0, 1);
+            this.index = index;
+        }
+
+        public int get() {
+            return index;
+        }
+
+        public String toString() {
+            return String.valueOf(index);
+        }
+    }
+
+    private static class Slicing extends Offset {
+        private final int start, stop, step;
+
+        public Slicing(int start, int stop, int step, int length) {
+            super(1, length);
+            this.start = start;
+            this.stop = stop;
+            this.step = step;
+        }
+
+        public int get(int index) {
+            if (index < 0) {
+                index += length;
+            }
+            return start + step * index;
+        }
+
+        public String toString() {
+            return start + ":" + stop + ":" + step;
+        }
+
+        public Offset get(Selection selection) {
+            if (selection instanceof Slice) return get((Slice) selection);
+            return get((Index) selection);
+        }
+
+        public Slicing get(Slice slice) {
+            Slicing slicing = slice.slicing(length);
+            return new Slicing(
+                    start + slicing.start,
+                    start + slicing.stop,
+                    step * slicing.step,
+                    slicing.length
+            );
+        }
+
+        public Indexing get(Index index) {
+            return new Indexing(get(index.indexing(length).get()));
+        }
+    }
+
+    private static class TypedArray<T> {
+        public final Object[] buffer;
+
+        public TypedArray(int length) {
+            buffer = new Object[length];
+        }
+
+        @SuppressWarnings("unchecked")
+        public T get(int index) {
+            return (T) buffer[index];
+        }
+
+        public void set(int index, T value) {
+            buffer[index] = value;
+        }
     }
 
     static class Operator {
@@ -659,224 +937,61 @@ class NDArray<T> {
         }
     }
 
-    static class Broadcast<T> implements Iterator<int[][]> {
+    private static class Broadcast implements Iterable<int[][]> {
+        public final int ndim;
         public final int[] shape;
+        private final NDArray<?>[] ndarrays;
 
-        NDArray<T>[] ndarrays;
-
-        private NDArray.IndexIterator indexIterator;
-        private int[][] arrayIndices;
-
-        @SafeVarargs
-        public Broadcast(NDArray<T>... ndarrays) {
-            this.ndarrays = ndarrays;
-            this.shape = shape();
-            if (shape != null) {
-                indexIterator = new NDArray.IndexIterator(shape);
-                arrayIndices = new int[ndarrays.length][];
-                for (int i = 0; i < ndarrays.length; i++) {
-                    arrayIndices[i] = new int[ndarrays[i].shape.length];
-                }
+        public Broadcast(NDArray<?>... ndarrays) {
+            int[][] shapes = new int[ndarrays.length][];
+            for (int i = 0; i < shapes.length; i++) {
+                shapes[i] = ndarrays[i].shape;
             }
+            this.ndarrays = ndarrays;
+            this.shape = broadcast_shapes(shapes);
+            assert this.shape != null;
+            this.ndim = this.shape.length;
         }
 
-        private int[] shape() {
-            int ndim = 0;
-            for (NDArray<T> ndarray : ndarrays) ndim = Math.max(ndarray.shape.length, ndim);
-            int[] shape = new int[ndim];
+        public Iterator<int[][]> iterator() {
+            return new BroadcastIterator(this);
+        }
 
-            for (int i = 0; i < ndim; i++) {
-                int m = ndim - 1 - i;
-                shape[m] = 1;
-                for (NDArray<T> ndarray : ndarrays) {
-                    int n = ndarray.shape.length - 1 - i;
-                    if (n >= 0) {
-                        if (shape[m] == 1) shape[m] = ndarray.shape[n];
-                        else if (ndarray.shape[n] != 1 && ndarray.shape[n] != shape[m]) {
-                            return null;
-                        }
+        private static class BroadcastIterator implements Iterator<int[][]> {
+            private final Broadcast broadcast;
+            private final Iterator<int[]> iterator;
+            private final int[][] out;
+
+            public BroadcastIterator(Broadcast broadcast) {
+                this.broadcast = broadcast;
+
+                this.iterator = ndindex(broadcast.shape).iterator();
+                this.out = new int[broadcast.ndarrays.length][];
+                for (int i = 0; i < broadcast.ndarrays.length; i++) {
+                    this.out[i] = new int[broadcast.ndarrays[i].ndim];
+                }
+            }
+
+            public boolean hasNext() {
+                return iterator.hasNext();
+            }
+
+            public int[][] next() {
+                int[] value = iterator.next();
+                for (int i = 0; i < broadcast.ndarrays.length; i++) {
+                    int[] index = out[i];
+                    int[] shape = broadcast.ndarrays[i].shape;
+                    for (int j = 0; j < index.length; j++) {
+                        int n = index.length - 1 - j;
+                        index[n] = shape[n] == 1 ? 0 : value[value.length - 1 - j];
                     }
                 }
+                return out;
             }
-
-            return shape;
-        }
-
-        public boolean hasNext() {
-            return indexIterator.hasNext();
-        }
-
-        public int[][] next() {
-            int[] current = indexIterator.next();
-            for (int i = 0; i < ndarrays.length; i++) {
-                int[] indices = arrayIndices[i];
-                int[] shape = ndarrays[i].shape;
-                for (int j = 0; j < indices.length; j++) {
-                    int n = indices.length - 1 - j;
-//                    print(n + ", " + (current.length -1 -j));
-                    indices[n] = shape[n] == 1 ? 0 : current[current.length - 1 - j];
-                }
-            }
-            return arrayIndices;
         }
     }
 
-    static abstract class Selection {
-    }
-
-    static private class Index extends Selection {
-        int ind;
-
-        Index(int ind) {
-            this.ind = ind;
-        }
-
-        public Indexing indexing(int length) {
-            return new Indexing(ind < 0 ? ind + length : ind);
-        }
-
-        public String toString() {
-            return String.valueOf(ind);
-        }
-    }
-
-    static private class Slice extends Selection {
-        Integer start, stop, step;
-
-        Slice(Integer start, Integer stop, Integer step) {
-            this.start = start;
-            this.stop = stop;
-            this.step = step;
-        }
-
-        public Slicing slicing(int length) {
-            Integer start = this.start,
-                    stop = this.stop,
-                    step = this.step;
-
-            if (step == null) {
-                step = 1;
-            }
-
-            int defStart = step < 0 ? length - 1 : 0;
-            int defStop = step < 0 ? -1 : length;
-
-            if (start == null) {
-                start = defStart;
-            } else {
-                if (start < 0) start += length;
-                if (start < 0) start = step < 0 ? -1 : 0;
-                if (start >= length) start = step < 0 ? length - 1 : length;
-            }
-
-            if (stop == null) {
-                stop = defStop;
-            } else {
-                if (stop < 0) stop += length;
-                if (stop < 0) stop = step < 0 ? -1 : 0;
-                if (stop >= length) stop = step < 0 ? length - 1 : length;
-            }
-
-            int sliceLength;
-            if ((step == 0) || (step < 0 && stop >= start) || (step > 0 && start >= stop)) {
-                sliceLength = 0;
-            } else if (step < 0) {
-                sliceLength = (stop - start + 1) / (step) + 1;
-            } else {
-                sliceLength = (stop - start - 1) / (step) + 1;
-            }
-
-            return new Slicing(start, stop, step, sliceLength);
-        }
-
-        public String toString() {
-            return start + ":" + stop + ":" + step;
-        }
-    }
-
-    static abstract private class Offset {
-    }
-
-    static private class Indexing extends Offset {
-        private final int ind;
-
-        public Indexing(int ind) {
-            this.ind = ind;
-        }
-
-        public int get() {
-            return ind;
-        }
-
-        public String toString() {
-            return String.valueOf(ind);
-        }
-    }
-
-    static private class Slicing extends Offset {
-        final int start, stop, step;
-        final int length;
-
-        Slicing(int start, int stop, int step, int length) {
-            this.start = start;
-            this.stop = stop;
-            this.step = step;
-            this.length = length;
-//            print(start+", "+stop+", "+step+", "+length);
-        }
-
-        public Slicing get(Slice slice) {
-            Slicing sliced = slice.slicing(length);
-            int start = this.start + sliced.start;
-            int stop = this.start + sliced.stop;
-            int step = this.step * sliced.step;
-            return new Slicing(start, stop, step, sliced.length);
-        }
-
-        public Indexing get(Index index) {
-            return new Indexing(get(index.indexing(length).get()));
-        }
-
-        public int get(int ind) {
-            if (ind < 0) {
-                ind += length;
-            }
-            return start + step * ind;
-        }
-
-        public String toString() {
-            return start + ":" + stop + ":" + step;
-        }
-    }
-
-    static class TypedArray<T> {
-        final Object[] data;
-        public int[] shape;
-
-        public TypedArray(int[] shape) {
-            int length = 1;
-            for (int n : shape) length *= n;
-
-            this.shape = shape;
-            this.data = new Object[length];
-        }
-
-        @SuppressWarnings("unchecked")
-        public T get(int index) {
-            return (T) data[index];
-        }
-
-        public void set(int index, T value) {
-            data[index] = value;
-        }
-    }
-
-
-    static Iterable<int[]> ndindex(int[] shape) {
-        return new NdIndex(shape);
-    }
-
-    static private class NdIndex implements Iterable<int[]> {
+    public static class NdIndex implements Iterable<int[]> {
         private final int[] shape;
 
         public NdIndex(int[] shape) {
@@ -884,17 +999,18 @@ class NDArray<T> {
         }
 
         public Iterator<int[]> iterator() {
-            return new NdIndexIterator(shape);
+            return new NdIndexIterator(this);
         }
 
-        static private class NdIndexIterator implements Iterator<int[]> {
-            private final int[] shape;
+        private static class NdIndexIterator implements Iterator<int[]> {
+            private final NdIndex ndindex;
             private final int[] index;
             private final int[] out;
-            private boolean hasNext = false;
+            private boolean hasNext;
 
-            public NdIndexIterator(int[] shape) {
-                this.shape = shape;
+            public NdIndexIterator(NdIndex ndindex) {
+                this.ndindex = ndindex;
+                int[] shape = ndindex.shape;
                 this.index = new int[shape.length];
                 this.out = new int[shape.length];
 
@@ -902,6 +1018,8 @@ class NDArray<T> {
                     int size = shape[0];
                     for (int i = 1; i < shape.length; i++) size *= shape[i];
                     hasNext = size != 0;
+                } else {
+                    hasNext = true;
                 }
             }
 
@@ -910,55 +1028,24 @@ class NDArray<T> {
             }
 
             public int[] next() {
+                if (out.length == 0) {
+                    hasNext = false;
+                    return out;
+                }
                 int carry = 1;
                 for (int i = index.length - 1; i >= 0; i--) {
                     out[i] = index[i];
 
                     index[i] += carry;
                     carry = 0;
-                    if (index[i] >= shape[i]) {
-                        index[i] -= shape[i];
+                    if (index[i] >= ndindex.shape[i]) {
+                        index[i] -= ndindex.shape[i];
                         carry = 1;
                     }
                 }
                 if (carry != 0) hasNext = false;
                 return out;
             }
-        }
-    }
-
-    static class IndexIterator implements Iterator<int[]> {
-        private final int[] shape;
-        private final int[] indices;
-        private final int[] out;
-        private boolean hasNext;
-
-        public IndexIterator(int[] shape) {
-            this.shape = shape;
-            this.indices = new int[shape.length];
-            this.hasNext = true;
-
-            this.out = new int[shape.length];
-        }
-
-        public boolean hasNext() {
-            return hasNext;
-        }
-
-        public int[] next() {
-            int carry = 1;
-            for (int i = indices.length - 1; i >= 0; i--) {
-                out[i] = indices[i];
-
-                indices[i] += carry;
-                carry = 0;
-                if (indices[i] >= shape[i]) {
-                    indices[i] -= shape[i];
-                    carry = 1;
-                }
-            }
-            if (carry != 0) hasNext = false;
-            return out;
         }
     }
 }
