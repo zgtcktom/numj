@@ -32,7 +32,6 @@ public class Main {
         }
         print(String.valueOf(ndarray.size));
         print(Arrays.toString(ndarray.shape));
-        print(ndarray.data);
 
         NDArray<Double> _view = ndarray
                 .get(new Selection[]{
@@ -67,7 +66,6 @@ public class Main {
                 {6.0, 7.0, 8.0}
         });
 
-        print(x1.data);
         print("x1: " + x1);
         print("x2: " + x2);
 
@@ -130,7 +128,7 @@ public class Main {
         print(concat(concat0, concat1));
         print(Arrays.toString(concat0.get(slice(1, null)).shape));
 
-        print(new NDArray<Double>(new int[]{0, 2, 9}));
+        print(new NDArray<Double>(new int[]{0, 2, 9}), "wtf");
 
         print(mean(arange(0, 100, 1).reshape(new int[]{5, 5, -1}).astype(NDArray::Double), 1));
 
@@ -219,23 +217,119 @@ public class Main {
         print(equal(array(1), a2));
         print(equal(array(new int[]{1}), array(1)));
 
-        demo();
 
         NDArray<Double> ax = arange(18).astype(NDArray::Double);
         ax = power(ax, array(3).astype(NDArray::Double));
-        ax = ax.reshape(new int[]{-1,3,2}).copy();
+        ax = ax.reshape(new int[]{-1, 3, 2}).copy();
         ax = ax.get(slice(), slice(null, -1));
-        ax.transpose().set(new int[]{0,1,0}, -99.);
+        ax.transpose().set(new int[]{0, 1, 0}, -99.);
         print(ax);
         print(ax.transpose());
 
+        print();
+
+        demo();
+        indexing();
         _sum();
         _mean();
+        _amax();
+        _argmax();
+
+        _advanced_index();
+        _nonzero();
+        _where();
+        _broadcast_to();
 
         print("END");
     }
+    static void _nonzero(){
+        print("nonzero");
+        print(">>>", "x = np.array([[3, 0, 0], [0, 4, 0], [5, 6, 0]])");
+        NDArray<Integer> x = array(new Integer[][]{{3, 0, 0}, {0, 4, 0}, {5, 6, 0}});
+
+        print(">>>", "x");
+        print(x);
+
+        print(">>>", "np.nonzero(x)");
+        NDArray<Integer>[] c = nonzero(x);
+        NDArray<Integer> a = c[0];
+        NDArray<Integer> b = c[1];
+        print(a, b);
+
+        print();
+    }
+
+    static void _broadcast_to(){
+        print("broadcast_to");
+        print(">>>","x = np.array([1, 2, 3])");
+        NDArray<Integer> x=array(new int[]{1,2,3});
+
+        print(">>>","np.broadcast_to(x, (3, 3))");
+        print(broadcast_to(x, new int[]{3,3}));
+        print();
+    }
+
+    static void _where(){
+        print("where");
+        print(">>>","a = np.arange(10)");
+        NDArray<Double> a = arange(10).astype(NDArray::Double);
+
+        print(">>>","a");
+        print(a);
+
+        print(">>>","np.where(a < 5, a, 10*a)");
+        print(where(
+                lt(a, array(5).astype(NDArray::Double)),
+                a,
+                mul(a, array(10.))
+        ));
+
+        print(">>>","np.where([[True, False], [True, True]],[[1, 2], [3, 4]],[[9, 8], [7, 6]])");
+        print(where(
+                array(new Boolean[][]{{true, false},{true,true}}),
+                array(new Integer[][]{{1, 2},{3,4}}),
+                array(new Integer[][]{{9, 8},{7,6}})
+        ));
+
+        print(">>>","a = np.array([[0, 1, 2], [0, 2, 4], [0, 3, 6]])");
+        a = array(new Double[][]{{0.,1.,2.},{0.,2.,4.}, {0.,3.,6.}});
+
+        print(">>>","np.where(a < 4, a, -1)");
+        print(where(
+                lt(a, array(4.)),
+                a,
+                array(-1.)
+        ));
+        print();
+    }
+
+    static void _advanced_index(){
+        print("advanced_index");
+
+        print(">>>","x = np.array([1., -1., -2., 3])");
+        NDArray<Double> x = array(new Double[]{1., -1., -2., 3.});
+
+        print(">>>", x);
+        print(x);
+
+        print(">>>", "x < 0");
+        print(lt(x, array(0.0)));
+
+        print(">>>", "x = np.array([[0, 1], [1, 1], [2, 2]])");
+        x=array(new Double[][]{{0., 1.}, {1., 1.}, {2., 2.}});
+
+        print(">>>", x);
+        print(x);
+
+        print(">>>", "x <= 1");
+        print(lte(x, array(1.)));
+
+        print();
+    }
 
     static void demo() {
+        print("demo");
+
         NDArray<Integer> a = arange(15).reshape(new int[]{3, 5});
         print("a = np.arange(15).reshape(3, 5)");
         print("a", a);
@@ -246,22 +340,22 @@ public class Main {
         print("b = np.array([6,7,8])");
         print("b", b);
 
-
-        indexing();
+        print();
     }
 
-    static void _sum(){
+    static void _sum() {
+        print("sum");
         print(">>>", "np.sum([0.5, 1.5])");
-        print(sum(array(new double[]{0.5,1.5})));
+        print(sum(array(new double[]{0.5, 1.5})));
 
         print(">>>", "np.sum([[0, 1], [0, 5]])");
-        print(sum(array(new double[][]{{0.,1.},{0.,5.}})));
+        print(sum(array(new double[][]{{0., 1.}, {0., 5.}})));
 
-        print(">>>","np.sum([[0, 1], [0, 5]], axis=0)");
-        print(sum(array(new double[][]{{0.,1.},{0.,5.}}), 0));
+        print(">>>", "np.sum([[0, 1], [0, 5]], axis=0)");
+        print(sum(array(new double[][]{{0., 1.}, {0., 5.}}), 0));
 
-        print(">>>","np.sum([[0, 1], [0, 5]], axis=1)");
-        print(sum(array(new double[][]{{0.,1.},{0.,5.}}), 1));
+        print(">>>", "np.sum([[0, 1], [0, 5]], axis=1)");
+        print(sum(array(new double[][]{{0., 1.}, {0., 5.}}), 1));
 
         print(">>>", "c = np.arange(2*3*4*5).reshape(2,3,4,5)");
         NDArray<Double> c = arange(2 * 3 * 4 * 5).astype(NDArray::Double).reshape(new int[]{2, 3, 4, 5});
@@ -277,20 +371,37 @@ public class Main {
 
         print(">>>", "np.sum(c, axis=(0,1,2))");
         print(sum(c, new int[]{0, 1, 2}));
+        print();
     }
 
-    static void _mean(){
+    static void _amax() {
+        print("amax");
+        print(">>>", "a = np.array([[0, 1], [2, 3]])");
+        NDArray<Double> a = array(new Double[][]{{0., 1.}, {2., 3.}});
+        print(">>>", "np.amax(a)");
+        print(amax(a));
+        print(">>>", "np.amax(a, axis=0)");
+        print(amax(a, 0));
+        print(">>>", "np.amax(a, axis=1)");
+        print(amax(a, 1));
+        print();
+    }
+
+    static void _mean() {
+        print("mean");
         print(">>>", "a = np.array([[1, 2], [3, 4]])");
         NDArray<Double> a = array(new Double[][]{{1., 2.}, {3., 4.}});
-        print(">>>","np.mean(a)");
+        print(">>>", "np.mean(a)");
         print(mean(a));
         print(">>>", "np.mean(a, axis=0)");
         print(mean(a, 0));
-        print(">>>","np.mean(a, axis=1)");
+        print(">>>", "np.mean(a, axis=1)");
         print(mean(a, 1));
+        print();
     }
 
     static void indexing() {
+        print("indexing");
 
         print(">>>", "a = np.arange(10)**3");
         NDArray<Double> a = arange(10).astype(NDArray::Double);
@@ -350,9 +461,33 @@ public class Main {
 
         print(">>>", "for element in b.flat:");
         print("...", "\tprint(element)");
-        for (Integer element : b.flat()) {
+        for (Integer element : b.flat) {
             print(element);
         }
+        print();
+    }
+
+    static void _argmax() {
+        print("argmax");
+        print(">>>", "a = np.arange(6).reshape(2,3) + 10");
+        NDArray<Double> a = add(
+                arange(6).reshape(new int[]{2, 3}).astype(NDArray::Double),
+                array(10).astype(NDArray::Double)
+        );
+
+        print(">>>", "a");
+        print(a);
+
+        print(">>>", "np.argmax(a)");
+        print(argmax(a));
+
+        print(">>>", "np.argmax(a, axis=0)");
+        print(argmax(a, 0));
+
+        print(">>>", "np.argmax(a, axis=1)");
+        print(argmax(a, 1));
+
+        print();
     }
 
     public static void main(String[] args) {

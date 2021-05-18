@@ -5,18 +5,20 @@ import java.util.*;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
+import static java.lang.Double.NaN;
+
 
 class NDArray<T> implements Iterable<NDArray<T>> {
 
     private static final Random rand = new Random();
     private static final int[] EMPTY = new int[0];
-    private static final Slice ALL = slice();
-    public final TypedArray<T> data;
     public final int[] shape;
     public final int ndim;
     public final int size;
     public final NDArray<T> base;
-    private final int[] strides;
+    public final Flatiter<T> flat = new Flatiter<>(this);
+    private final TypedArray<T> data;
+    public final int[] strides;
     private final Offset[] offsets;
 
     public NDArray(int[] shape) {
@@ -43,13 +45,15 @@ class NDArray<T> implements Iterable<NDArray<T>> {
     }
 
     private NDArray(NDArray<T> base, Offset[] offsets, int[] strides) {
-        this.offsets = offsets;
         this.base = base.base != null ? base.base : base;
+        this.offsets = offsets;
         this.strides = strides;
-        data = base.data;
+        this.data = base.data;
 
         int ndim = 0;
         for (Offset offset : offsets) ndim += offset.ndim;
+        this.ndim = ndim;
+
         int size = 1;
         int[] shape = new int[ndim];
         for (int i = 0, j = 0; i < offsets.length; i++) {
@@ -59,7 +63,6 @@ class NDArray<T> implements Iterable<NDArray<T>> {
                 j++;
             }
         }
-        this.ndim = ndim;
         this.shape = shape;
         this.size = size;
     }
@@ -138,7 +141,6 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         return ndarray;
     }
 
-
     private static int getLength(int start, int stop, int step) {
         int length;
         if ((step == 0) || (step < 0 && stop >= start) || (step > 0 && start >= stop)) {
@@ -181,7 +183,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
     }
 
     public static Slice slice() {
-        return new Slice(null, null, 1);
+        return Slice.ALL;
     }
 
     public static Slice slice(Integer start, Integer stop) {
@@ -261,60 +263,49 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         return out;
     }
 
-    static public NDArray<Double> zeros(int[] shape) {
-        NDArray<Double> ndarray = new NDArray<>(shape);
-        for (int[] index : ndindex(ndarray.shape)) {
-            ndarray.itemset(index, 0.0);
-        }
-        return ndarray;
-    }
-
     static public Boolean all(NDArray<Boolean> ndarray) {
-        for (int[] index : ndindex(ndarray.shape)) {
-            if (!ndarray.item(index)) return false;
+        for (Boolean value : ndarray.flat) {
+            if (!value) return false;
         }
         return true;
     }
 
     static public Boolean any(NDArray<Boolean> ndarray) {
-        for (int[] index : ndindex(ndarray.shape)) {
-            if (ndarray.item(index)) return true;
+        for (Boolean value : ndarray.flat) {
+            if (value) return true;
         }
         return false;
     }
 
     static public NDArray<Double> ones(int[] shape) {
         NDArray<Double> ndarray = new NDArray<>(shape);
-        for (int[] index : ndindex(ndarray.shape)) {
-            ndarray.itemset(index, 1.0);
+        for (int i = 0; i < ndarray.size; i++) {
+            ndarray.itemset(i, 1.0);
+        }
+        return ndarray;
+    }
+
+    static public NDArray<Double> zeros(int[] shape) {
+        NDArray<Double> ndarray = new NDArray<>(shape);
+        for (int i = 0; i < ndarray.size; i++) {
+            ndarray.itemset(i, 0.0);
         }
         return ndarray;
     }
 
     static public NDArray<Double> random(int[] shape) {
         NDArray<Double> ndarray = new NDArray<>(shape);
-        for (int[] index : ndindex(ndarray.shape)) {
-            ndarray.itemset(index, rand.nextDouble());
+        for (int i = 0; i < ndarray.size; i++) {
+            ndarray.itemset(i, rand.nextDouble());
         }
         return ndarray;
-    }
-
-    static public Double amin(NDArray<Double> ndarray) {
-        Double min = null;
-        for (int[] index : ndindex(ndarray.shape)) {
-            Double value = ndarray.item(index);
-            if (min == null) min = value;
-            else min = Math.min(min, value);
-        }
-        return min;
     }
 
     static public NDArray<Double> nan_to_num(NDArray<Double> ndarray) {
         NDArray<Double> out = ndarray.copy();
         for (int[] index : ndindex(ndarray.shape)) {
             Double value = ndarray.item(index);
-            if (value == null || Double.isNaN(value))
-                value = 0.0;
+            if (value == null || Double.isNaN(value)) value = 0.0;
             out.itemset(index, value);
         }
         return out;
@@ -328,119 +319,51 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         return out;
     }
 
-    static public NDArray<Double> amin(NDArray<Double> ndarray, int axis) {
-        int[] shape = new int[ndarray.shape.length - 1];
-        Selection[] selections = new Selection[ndarray.shape.length];
-        for (int i = 0, j = 0; i < ndarray.shape.length; i++) {
-            if (axis != i) {
-                shape[j] = ndarray.shape[i];
-                j++;
-            }
-        }
-        NDArray<Double> out = new NDArray<>(shape);
-
-        int[] outIndices = new int[out.shape.length];
-        for (int[] index : ndindex(ndarray.shape)) {
-            if (index[axis] != 0) continue;
-            for (int i = 0, j = 0; i < selections.length; i++) {
-                if (i == axis) selections[i] = slice();
-                else {
-                    selections[i] = index(index[i]);
-                    outIndices[j] = index[i];
-                    j++;
-                }
-            }
-            out.itemset(outIndices, amin(ndarray.get(selections)));
-        }
-        return out;
+    static public Double mean(NDArray<Double> ndarray) {
+        if (ndarray.size == 0) return null;
+        return sum(ndarray) / ndarray.size;
     }
 
     static public NDArray<Double> mean(NDArray<Double> ndarray, int axis) {
-        int[] shape = new int[ndarray.shape.length - 1];
-        Selection[] selections = new Selection[ndarray.shape.length];
-        for (int i = 0, j = 0; i < ndarray.shape.length; i++) {
-            if (axis != i) {
-                shape[j] = ndarray.shape[i];
-                j++;
-            }
-        }
-        NDArray<Double> out = new NDArray<>(shape);
-
-        int[] outIndices = new int[out.shape.length];
-        for (int[] index : ndindex(ndarray.shape)) {
-            if (index[axis] != 0) continue;
-            for (int i = 0, j = 0; i < selections.length; i++) {
-                if (i == axis) selections[i] = slice();
-                else {
-                    selections[i] = index(index[i]);
-                    outIndices[j] = index[i];
-                    j++;
-                }
-            }
-            out.itemset(outIndices, mean(ndarray.get(selections)));
-        }
-        return out;
-    }
-
-    static public Double mean(NDArray<Double> ndarray) {
-        Double total = 0.0;
-        for (int[] index : ndindex(ndarray.shape)) {
-            total += ndarray.item(index);
-        }
-        if (ndarray.size > 0)
-            return total / ndarray.size;
-        return null;
+        return useAxis(ndarray, axis, NDArray::mean);
     }
 
     static public NDArray<Double> abs(NDArray<Double> ndarray) {
         NDArray<Double> out = new NDArray<>(ndarray.shape);
-        for (int[] index : ndindex(ndarray.shape)) {
-            Double value = ndarray.item(index);
-            out.itemset(index, Math.abs(value));
+        int i = 0;
+        for (Double value : ndarray.flat) {
+            out.itemset(i++, Math.abs(value));
         }
         return out;
     }
 
-    static public NDArray<Double> amax(NDArray<Double> ndarray, int axis) {
-        int[] shape = new int[ndarray.shape.length - 1];
-        Selection[] selections = new Selection[ndarray.shape.length];
-        for (int i = 0, j = 0; i < ndarray.shape.length; i++) {
-            if (axis != i) {
-                shape[j] = ndarray.shape[i];
-                j++;
-            }
+    static public Double amin(NDArray<Double> ndarray) {
+        Double min = ndarray.item();
+        for (Double value : ndarray.flat) {
+            min = Math.min(min, value);
         }
-        NDArray<Double> out = new NDArray<>(shape);
+        return min;
+    }
 
-        int[] outIndices = new int[out.shape.length];
-        for (int[] index : ndindex(ndarray.shape)) {
-            if (index[axis] != 0) continue;
-            for (int i = 0, j = 0; i < selections.length; i++) {
-                if (i == axis) selections[i] = slice();
-                else {
-                    selections[i] = index(index[i]);
-                    outIndices[j] = index[i];
-                    j++;
-                }
-            }
-            out.itemset(outIndices, amax(ndarray.get(selections)));
-        }
-        return out;
+    static public NDArray<Double> amin(NDArray<Double> ndarray, int axis) {
+        return useAxis(ndarray, axis, NDArray::amin);
     }
 
     static public Double amax(NDArray<Double> ndarray) {
-        Double max = null;
-        for (int[] index : ndindex(ndarray.shape)) {
-            Double value = ndarray.item(index);
-            if (max == null) max = value;
-            else max = Math.max(max, value);
+        Double max = ndarray.item();
+        for (Double value : ndarray.flat) {
+            max = Math.max(max, value);
         }
         return max;
     }
 
+    static public NDArray<Double> amax(NDArray<Double> ndarray, int axis) {
+        return useAxis(ndarray, axis, NDArray::amax);
+    }
+
     public static Double sum(NDArray<Double> ndarray) {
         Double sum = 0.;
-        for (Double value : ndarray.flat()) sum += value;
+        for (Double value : ndarray.flat) sum += value;
         return sum;
     }
 
@@ -463,7 +386,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         int[] shape = new int[ndarray.ndim - axes.length];
         Selection[] selections = new Selection[ndarray.ndim];
         for (int i = 0, j = 0; i < ndarray.ndim; i++) {
-            if (isin(axes, i)) selections[i] = ALL;
+            if (isin(axes, i)) selections[i] = slice();
             else shape[j++] = ndarray.shape[i];
         }
 
@@ -481,7 +404,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         int[] shape = new int[ndarray.ndim - 1];
         Selection[] selections = new Selection[ndarray.ndim];
         for (int i = 0, j = 0; i < ndarray.ndim; i++) {
-            if (axis == i) selections[i] = ALL;
+            if (axis == i) selections[i] = slice();
             else shape[j++] = ndarray.shape[i];
         }
 
@@ -495,19 +418,22 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         return out;
     }
 
-    static public int argmax(NDArray<Double> ndarray) {
-        Double max = null;
+    static public Integer argmax(NDArray<Double> ndarray) {
+        double max = NaN;
         int ind = -1;
         int i = 0;
-        for (int[] index : ndindex(ndarray.shape)) {
-            Double value = ndarray.item(index);
-            if (max == null || value > max) {
+        for (Double value : ndarray.flat) {
+            if (ind == -1 || value > max) {
                 max = value;
                 ind = i;
             }
             i++;
         }
         return ind;
+    }
+
+    public static NDArray<Integer> argmax(NDArray<Double> ndarray, int axis) {
+        return useAxis(ndarray, axis, NDArray::argmax);
     }
 
     @SafeVarargs
@@ -541,7 +467,9 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         for (Object arg : args) {
             if (string.length() != 0) string.append(" ");
             String str;
-            if (arg instanceof int[]) {
+            if (arg == null) {
+                str = "null";
+            } else if (arg instanceof int[]) {
                 str = Arrays.toString((int[]) arg);
             } else {
                 str = arg.toString();
@@ -599,7 +527,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
                 int n = shape.length - 1 - i;
                 if (n < 0) continue;
                 if (out[m] == 1) out[m] = shape[n];
-                else if (shape[n] != 1 && shape[n] != out[m]) return null;
+                else if (shape[n] != 1 && shape[n] != out[m]) throw new RuntimeException();
             }
         }
         return out;
@@ -641,6 +569,63 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         return out;
     }
 
+    public static int count_nonzero(NDArray<Integer> ndarray){
+        int count=0;
+        for(int value :ndarray.flat){
+            if(value!=0)count++;
+        }
+        return count;
+    }
+
+    public static <T> NDArray<T> where(NDArray<Boolean> ndarray, NDArray<T> x, NDArray<T> y){
+        Broadcast broadcast = broadcast(ndarray, x, y);
+        if(!array_equal(ndarray.shape, broadcast.shape)) throw new ArrayIndexOutOfBoundsException();
+        NDArray<T> out = new NDArray<>(ndarray.shape);
+        for (int[][] indices : broadcast){
+            print("###", indices[0], indices[1], indices[2]);
+            out.itemset(indices[0], ndarray.item(indices[0])?x.item(indices[1]):y.item(indices[2]));
+        }
+        return out;
+    }
+
+    @SuppressWarnings("unchecked")
+    public static NDArray<Integer>[] nonzero(NDArray<Integer> ndarray) {
+        NDArray<Integer>[] out = new NDArray[ndarray.ndim];
+        int n = count_nonzero(ndarray);
+        for (int i = 0; i < ndarray.ndim; i++) {
+            out[i] = new NDArray<>(new int[]{n});
+        }
+        int j = 0;
+        for (int[] index : ndindex(ndarray.shape)) {
+            if(ndarray.item(index) != 0) {
+                for (int i = 0; i < ndarray.ndim; i++) {
+                    out[i].itemset(j, index[i]);
+                }
+                j++;
+            }
+        }
+        return out;
+    }
+
+    public static <T> NDArray<T> broadcast_to(NDArray<T> ndarray, int[] shape){
+        if(!array_equal(broadcast_shapes(ndarray.shape, shape), shape)) throw new ArrayIndexOutOfBoundsException();
+
+        Offset[] offsets = new Offset[shape.length];
+        int[] strides = new int[shape.length];
+        for (int i = 0; i < shape.length; i++) {
+            int n = shape.length - 1 - i;
+            if(i < ndarray.ndim){
+                int m = ndarray.ndim - 1- i;
+                strides[n] = ndarray.strides[m];
+                offsets[n] = ndarray.offsets[m];
+            }else {
+                strides[n] = 0;
+                offsets[n] = new Slicing(0, shape[n], 1, shape[n]);
+            }
+        }
+        return new NDArray<>(ndarray, offsets, strides);
+    }
+
     public T item(int index) {
         return data.get(index);
     }
@@ -654,14 +639,14 @@ class NDArray<T> implements Iterable<NDArray<T>> {
     }
 
     private int itemindex(int[] index) {
-        if (index.length != ndim) throw new ArrayIndexOutOfBoundsException();
+        if (index.length != ndim && index != EMPTY) throw new ArrayIndexOutOfBoundsException();
         int ind = 0;
         for (int i = 0, j = 0; i < offsets.length; i++) {
             int n;
             if (offsets[i].ndim == 0) { // Indexing
                 n = offsets[i].get();
             } else { // Slicing
-                n = offsets[i].get(index[j]);
+                n = offsets[i].get(index == EMPTY ? 0 : index[j]);
                 j++;
             }
             ind += n * strides[i];
@@ -694,6 +679,11 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         }
         Offset[] offsets = offsetList.toArray(new Offset[0]);
         return new NDArray<>(this, offsets, strides);
+    }
+
+    public NDArray<T> get_ex(NDArray<Boolean> mask) {
+
+        return null;
     }
 
     public String toString() {
@@ -824,10 +814,6 @@ class NDArray<T> implements Iterable<NDArray<T>> {
         }
     }
 
-    public Flatiter<T> flat() {
-        return new Flatiter<>(this);
-    }
-
     private static class ElementIterator<T> implements Iterator<NDArray<T>> {
         private final NDArray<T> ndarray;
         private int ind = 0;
@@ -851,7 +837,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
     }
 
     static public class Index extends Selection {
-        int index;
+        private final int index;
 
         public Index(int index) {
             this.index = index;
@@ -867,6 +853,7 @@ class NDArray<T> implements Iterable<NDArray<T>> {
     }
 
     static public class Slice extends Selection {
+        public static final Slice ALL = slice(null, null, 1);
         Integer start, stop, step;
 
         public Slice(Integer start, Integer stop, Integer step) {
@@ -1034,27 +1021,27 @@ class NDArray<T> implements Iterable<NDArray<T>> {
             return a / b;
         }
 
-        static Boolean gt(Double a, Double b) {
+        static boolean gt(Double a, Double b) {
             return a > b;
         }
 
-        static Boolean gte(Double a, Double b) {
+        static boolean gte(Double a, Double b) {
             return a >= b;
         }
 
-        static Boolean lt(Double a, Double b) {
+        static boolean lt(Double a, Double b) {
             return a < b;
         }
 
-        static Boolean lte(Double a, Double b) {
+        static boolean lte(Double a, Double b) {
             return a <= b;
         }
 
-        static Boolean eq(Double a, Double b) {
+        static boolean eq(Double a, Double b) {
             return a.equals(b);
         }
 
-        static Boolean neq(Double a, Double b) {
+        static boolean neq(Double a, Double b) {
             return !a.equals(b);
         }
     }
@@ -1071,7 +1058,6 @@ class NDArray<T> implements Iterable<NDArray<T>> {
             }
             this.ndarrays = ndarrays;
             this.shape = broadcast_shapes(shapes);
-            assert this.shape != null;
             this.ndim = this.shape.length;
         }
 
